@@ -1,0 +1,6 @@
+- Pure Dart implementation
+- Package: makes it easier to make breaking changes
+- Disallow "implement"
+- Provide memory mock
+- Less abstraction
+- Kill IOSink
