@@ -1,21 +1,21 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ffi';
 
 import 'package:stdlibc/stdlibc.dart' as libc;
-import 'package:stdlibc/src/std/ffigen.dart' as ffigen;
 
 import 'filesystem.dart';
 
 // POSIX error codes.
 // See https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/errno.h.html
+//
+// TODO(bquinlan): Investigate getting these codes from `package:stdlibc`
 const _ePerm = 1;
-const _eNoEnt = 2;
-const _eAccess = 13;
-const _eExist = 17;
 
-// TODO(bquinlan): make this work.
+// TODO(bquinlan): Make this work.
+//
+// The problem is that native finalizers consume a `void *` but file descriptors
+// are `int`. On some platforms (e.g. Android), sizeof(void *) != sizeof(int).
 class Fd implements Finalizable {
   final int fd;
 
@@ -31,7 +31,7 @@ base class PosixFilesystem extends FileSystem {
 
     return switch (errno) {
       _ePerm => PathAccessException(path, OSError('', errno)),
-      // Do less crappy error decoding.
+      // TODO(bquinlan): Do less crappy error decoding.
       _ => FileSystemException(message, path, OSError('', errno))
     };
   }
@@ -66,11 +66,12 @@ base class PosixFilesystem extends FileSystem {
     int flags = libc.O_RDWR | libc.O_CREAT;
     flags |= switch (mode) {
       WriteMode.appendExisting => libc.O_APPEND,
-      WriteMode.failExisting => 0, // libc.O_EXCL,
+      WriteMode.failExisting => libc.O_EXCL,
       WriteMode.truncateExisting => libc.O_TRUNC,
       _ => throw ArgumentError.value(mode, 'invalid write mode'),
     };
 
+    // Pass 0x666 when https://github.com/canonical/stdlibc.dart/pull/121 lands.
     final fd = Fd(_retry(() => libc.open(path, flags: flags)));
     if (fd.fd == -1) {
       throw _getError('could not open file', path);
