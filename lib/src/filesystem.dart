@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:io';
+import 'dart:io' as io;
 import 'dart:typed_data';
 
 import 'posix_file_system.dart';
@@ -70,7 +70,7 @@ base class FileSystem {
 }
 
 FileSystem fs() {
-  if (Platform.isWindows) {
+  if (io.Platform.isWindows) {
     return WindowsFilesystem();
   }
   return PosixFilesystem();

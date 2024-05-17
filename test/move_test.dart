@@ -4,14 +4,16 @@ import 'package:test/test.dart';
 
 void main() {
   group('move', () {
-    final tmp = Directory.systemTemp.createTempSync('file');
+    final tmp = Directory.systemTemp.createTempSync('move');
 
-    test('delete file', () {
-      final path = '${tmp.path}/file1';
-      fs().writeString(path, 'Hello World!');
-      expect(File(path).readAsBytesSync(), 'Hello World');
-      fs().delete(path);
-      expect(FileSystemEntity.typeSync(path), FileSystemEntityType.notFound);
+    test('move file', () {
+      final path1 = '${tmp.path}/file1';
+      final path2 = '${tmp.path}/file2';
+      fs().writeString(path1, 'Hello World!');
+      expect(File(path1).existsSync(), isTrue);
+      fs().move(path1, path2);
+      expect(File(path1).existsSync(), isFalse);
+      expect(File(path2).existsSync(), isTrue);
     });
   });
 }
