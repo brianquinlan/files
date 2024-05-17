@@ -2,6 +2,7 @@ name: files
 description: A starting point for Dart libraries or applications.
 version: 1.0.0
 # repository: https://github.com/my_org/my_repo
+publish_to: none
 
 environment:
   sdk: ^3.3.4
@@ -10,7 +11,8 @@ environment:
 dependencies:
   ffi: ^2.1.2
   posix: ^6.0.1
-  stdlibc: ^0.1.4
+  stdlibc:
+    git: git@github.com:canonical/stdlibc.dart
   win32: ^5.5.0
 
 dev_dependencies:

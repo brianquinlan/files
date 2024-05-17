@@ -52,6 +52,13 @@ base class PosixFilesystem extends FileSystem {
   }
 
   @override
+  void move(String from, String to) {
+    if (libc.rename(from, to) != 0) {
+      throw _getError('could not move file', to);
+    }
+  }
+
+  @override
   bool isFile(String path, {bool resolveSymlinks = true}) {
     final stat = resolveSymlinks ? libc.stat(path) : libc.lstat(path);
     if (stat == null) {

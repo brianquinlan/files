@@ -40,6 +40,10 @@ base class FileSystem {
     throw UnimplementedError('delete(...)');
   }
 
+  void move(String from, String to) {
+    throw UnimplementedError('move(...)');
+  }
+
   bool isFile(String path, {bool resolveSymlinks = true}) {
     throw UnimplementedError('isFile(...)');
   }
