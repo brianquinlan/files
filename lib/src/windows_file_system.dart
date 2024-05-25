@@ -8,6 +8,55 @@ import 'package:win32/win32.dart' as win32;
 
 import 'filesystem.dart';
 
+int _open(String path, {Allocator allocator = malloc}) {
+  return win32.CreateFile(
+    path.toNativeUtf16(allocator: allocator),
+    win32.GENERIC_ACCESS_RIGHTS.GENERIC_READ, //win32.FILE_ACCESS_RIGHTS
+    //    .FILE_APPEND_DATA, // Might need write if truncating
+    win32.FILE_SHARE_MODE.FILE_SHARE_READ |
+        win32.FILE_SHARE_MODE.FILE_SHARE_WRITE,
+    nullptr,
+    win32.FILE_CREATION_DISPOSITION.OPEN_EXISTING,
+    win32.FILE_FLAGS_AND_ATTRIBUTES.FILE_ATTRIBUTE_NORMAL,
+    win32.NULL,
+  );
+}
+
+class RandomAccessFile {
+  final int fileHandle;
+
+  RandomAccessFile._(this.fileHandle);
+
+  factory RandomAccessFile.open(String path) {
+    final fd = _open(path);
+    if (fd == win32.INVALID_HANDLE_VALUE) {
+      throw Exception('Open failed');
+    }
+
+    return RandomAccessFile._(fd);
+  }
+
+  int readInto(List<int> buffer, [int start = 0, int? end]) {
+    final buffEnd = RangeError.checkValidRange(start, end, buffer.length);
+    final numBytes = buffEnd - start;
+    if (numBytes == 0) {
+      return 0;
+    }
+
+    return using((arena) {
+      final buffPtr = arena.allocate<Uint8>(numBytes);
+      final bytesWritten = arena<win32.DWORD>();
+      if (win32.ReadFile(
+              fileHandle, buffPtr, numBytes, bytesWritten, nullptr) ==
+          0) {
+        throw Exception('did not work');
+      }
+      buffer.setRange(start, buffEnd, buffPtr.asTypedList(numBytes));
+      return bytesWritten.value;
+    });
+  }
+}
+
 base class WindowsFilesystem extends FileSystem {
   Exception _getError(String message, String path) {
     // TODO: GetLastError doesn't work:
