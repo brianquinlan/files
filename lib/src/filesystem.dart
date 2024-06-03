@@ -35,6 +35,16 @@ abstract interface class MinWriter {
 
 late Writer w;
 
+base class RFile {
+  int readInto(List<int> buffer, [int start = 0, int? end]) {
+    throw UnimplementedError('readInto(...)');
+  }
+
+  void close() {
+    throw UnimplementedError('close(...)');
+  }
+}
+
 base class FileSystem {
   void delete(String path) {
     throw UnimplementedError('delete(...)');
@@ -48,7 +58,9 @@ base class FileSystem {
     throw UnimplementedError('isFile(...)');
   }
 
-  void openWrite(path) {}
+  RFile open(String path) {
+    throw UnimplementedError('open(...)');
+  }
 
   // If the target is a symlink, delete the symlink. If the target is a
   // directory, its an error.

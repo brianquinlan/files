@@ -25,6 +25,29 @@ class Fd implements Finalizable {
   }
 }
 
+base class PosixRFile extends RFile {
+  final Fd fd;
+
+  PosixRFile(this.fd);
+
+  @override
+  int readInto(List<int> buffer, [int start = 0, int? end]) {
+    end = RangeError.checkValidRange(start, end, buffer.length);
+    if (end == start) {
+      return 0;
+    }
+    final count = end - start;
+    final readBytes = libc.read(fd.fd, count);
+//    buffer.setAll(start, readBytes);
+    return readBytes.length;
+  }
+
+  @override
+  void close() {
+    fd.close();
+  }
+}
+
 base class PosixFilesystem extends FileSystem {
   Exception _getError(String message, String path) {
     final errno = libc.errno;
@@ -42,6 +65,19 @@ base class PosixFilesystem extends FileSystem {
       result = f();
     } while (result == -1 && libc.errno == libc.EINTR);
     return result;
+  }
+
+  @override
+  RFile open(String path, {WriteMode mode = WriteMode.appendExisting}) {
+    int flags = libc.O_RDONLY;
+
+    final fd =
+        Fd(_retry(() => libc.open(path, flags: flags, mode: 438 // Octal: 666
+            )));
+    if (fd.fd == -1) {
+      throw _getError('could not open file', path);
+    }
+    return PosixRFile(fd);
   }
 
   @override
@@ -79,7 +115,9 @@ base class PosixFilesystem extends FileSystem {
     };
 
     // Pass 0x666 when https://github.com/canonical/stdlibc.dart/pull/121 lands.
-    final fd = Fd(_retry(() => libc.open(path, flags: flags)));
+    final fd =
+        Fd(_retry(() => libc.open(path, flags: flags, mode: 438 // Octal: 666
+            )));
     if (fd.fd == -1) {
       throw _getError('could not open file', path);
     }
