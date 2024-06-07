@@ -35,7 +35,7 @@ abstract interface class MinWriter {
 
 late Writer w;
 
-base class RFile {
+base class RandomAccessFile {
   int readInto(List<int> buffer, [int start = 0, int? end]) {
     throw UnimplementedError('readInto(...)');
   }
@@ -58,7 +58,7 @@ base class FileSystem {
     throw UnimplementedError('isFile(...)');
   }
 
-  RFile open(String path) {
+  RandomAccessFile open(String path) {
     throw UnimplementedError('open(...)');
   }
 

@@ -1,7 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ffi';
-
+import 'dart:typed_data';
+import 'package:ffi/ffi.dart' as ffi;
 import 'package:stdlibc/stdlibc.dart' as libc;
 
 import 'filesystem.dart';
@@ -25,10 +26,34 @@ class Fd implements Finalizable {
   }
 }
 
-base class PosixRFile extends RFile {
+/// The POSIX `read` function.
+///
+/// See https://pubs.opengroup.org/onlinepubs/9699919799/functions/read.html
+@Native<Int Function(Int, Pointer<Uint8>, Int)>(isLeaf: true)
+external int read(int fd, Pointer<Uint8> buf, int count);
+
+int _tempFailureRetry(int Function() f) {
+  int result;
+  do {
+    result = f();
+  } while (result == -1 && libc.errno == libc.EINTR);
+  return result;
+}
+
+Exception _getError(String message, String path) {
+  final errno = libc.errno;
+
+  return switch (errno) {
+    _ePerm => PathAccessException(path, OSError('', errno)),
+    // TODO(bquinlan): Do less crappy error decoding.
+    _ => FileSystemException(message, path, OSError('', errno))
+  };
+}
+
+base class PosixRandomAccessFile extends RandomAccessFile {
   final Fd fd;
 
-  PosixRFile(this.fd);
+  PosixRandomAccessFile(this.fd);
 
   @override
   int readInto(List<int> buffer, [int start = 0, int? end]) {
@@ -37,9 +62,21 @@ base class PosixRFile extends RFile {
       return 0;
     }
     final count = end - start;
-    final readBytes = libc.read(fd.fd, count);
-//    buffer.setAll(start, readBytes);
-    return readBytes.length;
+    late int r;
+    if (buffer is Uint8List) {
+      r = _tempFailureRetry(() => read(fd.fd, buffer.address, count));
+    } else {
+      ffi.using((arena) {
+        final buf = arena<Int8>(count);
+        r = _tempFailureRetry(() => read(fd.fd, buf.cast(), count));
+        buffer.setAll(0, buf.asTypedList(r));
+      });
+    }
+
+    if (r == -1) {
+      // Handle errors!
+    }
+    return r;
   }
 
   @override
@@ -49,35 +86,18 @@ base class PosixRFile extends RFile {
 }
 
 base class PosixFilesystem extends FileSystem {
-  Exception _getError(String message, String path) {
-    final errno = libc.errno;
-
-    return switch (errno) {
-      _ePerm => PathAccessException(path, OSError('', errno)),
-      // TODO(bquinlan): Do less crappy error decoding.
-      _ => FileSystemException(message, path, OSError('', errno))
-    };
-  }
-
-  int _retry(int Function() f) {
-    int result;
-    do {
-      result = f();
-    } while (result == -1 && libc.errno == libc.EINTR);
-    return result;
-  }
-
   @override
-  RFile open(String path, {WriteMode mode = WriteMode.appendExisting}) {
+  RandomAccessFile open(String path,
+      {WriteMode mode = WriteMode.appendExisting}) {
     int flags = libc.O_RDONLY;
 
-    final fd =
-        Fd(_retry(() => libc.open(path, flags: flags, mode: 438 // Octal: 666
+    final fd = Fd(_tempFailureRetry(
+        () => libc.open(path, flags: flags, mode: 438 // Octal: 666
             )));
     if (fd.fd == -1) {
       throw _getError('could not open file', path);
     }
-    return PosixRFile(fd);
+    return PosixRandomAccessFile(fd);
   }
 
   @override
@@ -115,14 +135,14 @@ base class PosixFilesystem extends FileSystem {
     };
 
     // Pass 0x666 when https://github.com/canonical/stdlibc.dart/pull/121 lands.
-    final fd =
-        Fd(_retry(() => libc.open(path, flags: flags, mode: 438 // Octal: 666
+    final fd = Fd(_tempFailureRetry(
+        () => libc.open(path, flags: flags, mode: 438 // Octal: 666
             )));
     if (fd.fd == -1) {
       throw _getError('could not open file', path);
     }
     try {
-      if (_retry(() => libc.write(fd.fd, bytes)) == -1) {
+      if (_tempFailureRetry(() => libc.write(fd.fd, bytes)) == -1) {
         throw _getError('could not write to file', path);
       }
     } finally {

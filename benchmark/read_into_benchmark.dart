@@ -7,7 +7,7 @@ import 'package:files/files.dart';
 class ReadIntoBenchmark extends BenchmarkBase {
   late Directory dir;
   late String path;
-  final buffer = List<int>.from(Uint8List(10 * 1024 * 1024));
+  final buffer = Uint8List(10 * 1024 * 1024);
 
   ReadIntoBenchmark(super.name);
 
