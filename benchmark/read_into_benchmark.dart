@@ -32,7 +32,7 @@ class PackageReadIntoBenchmark extends ReadIntoBenchmark {
   @override
   void run() {
     final rFile = fs().open(path);
-    rFile.readInto(buffer, 0, 10 * 1024 * 1024);
+    rFile.readInto(buffer, 0, buffer.length);
     rFile.close();
   }
 }
@@ -48,13 +48,12 @@ class DartIOReadIntoBenchmark extends ReadIntoBenchmark {
   @override
   Future run() async {
     final rFile = File(path).openSync(mode: FileMode.read);
-    rFile.readIntoSync(buffer, 0, 10 * 1024 * 1024);
+    rFile.readIntoSync(buffer, 0, buffer.length);
     rFile.closeSync();
   }
 }
 
 void main() {
-  // Run TemplateBenchmark
   DartIOReadIntoBenchmark.main();
   PackageReadIntoBenchmark.main();
 }
