@@ -64,6 +64,8 @@ base class PosixRandomAccessFile extends RandomAccessFile {
     final count = end - start;
     late int r;
     if (buffer is Uint8List) {
+      // This approach is also used in `dart:io` but the consequence is that
+      // GC cannot be performed while the `read` call is outstanding.
       r = _tempFailureRetry(() => read(fd.fd, buffer.address, count));
     } else {
       ffi.using((arena) {
