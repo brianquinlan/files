@@ -83,7 +83,7 @@ int _readInto(int fd, List<int> buffer, [int start = 0, int? end]) {
 /// I'm not sure that I like have this class as a pure data container.
 class _ReadIntoWork {
   int fd;
-  List<int> buffer;
+  Uint8List buffer;
   int start;
   int? end;
 
@@ -94,7 +94,7 @@ class _ReadIntoWork {
 final mutex = Mutex();
 
 @pragma('vm:shared')
-final _work = <int, Object>{};
+final _work = <Object, Object>{};
 
 base class PosixRandomAccessFile extends RandomAccessFile {
   final Fd fd;
@@ -103,21 +103,27 @@ base class PosixRandomAccessFile extends RandomAccessFile {
 
   @override
   Future<int> readIntoAsync(List<int> buffer, [int start = 0, int? end]) {
-    mutex.lock();
-    int index;
-    do {
-      index = Random().nextInt(1 << 32);
-    } while (_work.containsKey(index));
-    _work[index] = _ReadIntoWork(fd.fd, buffer, start, end);
-    mutex.unlock();
-
-    return Isolate.run(() {
+    if (buffer is TypedData) {
+      // Presumably TypedData is safe for multithreaded access.
       mutex.lock();
-      final w = _work[index] as _ReadIntoWork;
-      _work.remove(index);
+      final index = Object();
+      _work[index] = _ReadIntoWork(
+          fd.fd, (buffer as TypedData).buffer.asUint8List(), start, end);
       mutex.unlock();
-      return _readInto(w.fd, w.buffer, w.start, w.end);
-    });
+
+      return Isolate.run(() {
+        mutex.lock();
+        final w = _work.remove(index) as _ReadIntoWork;
+        mutex.unlock();
+        return _readInto(w.fd, w.buffer, w.start, w.end);
+      });
+    } else {
+      // List<int> may not be safe to share so do a slower/safer code path here.
+      // I think that the trick would be to *not* copy the buffer to the isolate
+      // and only transfer the data actual read back. This function can merge
+      // the original list with the read data.
+      throw UnimplementedError('sorry, only TypedData is supported for now');
+    }
   }
 
   @override
