@@ -1,8 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ffi';
+import 'dart:isolate';
+import 'dart:math';
 import 'dart:typed_data';
 import 'package:ffi/ffi.dart' as ffi;
+import 'package:files/src/posix_utils.dart';
 import 'package:stdlibc/stdlibc.dart' as libc;
 
 import 'filesystem.dart';
@@ -50,35 +53,76 @@ Exception _getError(String message, String path) {
   };
 }
 
+int _readInto(int fd, List<int> buffer, [int start = 0, int? end]) {
+  end = RangeError.checkValidRange(start, end, buffer.length);
+  if (end == start) {
+    return 0;
+  }
+  final count = end - start;
+  late int r;
+  if (buffer is Uint8List) {
+    // This approach is also used in `dart:io` but the consequence is that
+    // GC cannot be performed while the `read` call is outstanding.
+    r = _tempFailureRetry(() => read(fd, buffer.address, count));
+  } else {
+    ffi.using((arena) {
+      final buf = arena<Int8>(count);
+      r = _tempFailureRetry(() => read(fd, buf.cast(), count));
+      buffer.setAll(0, buf.asTypedList(r));
+    });
+  }
+
+  if (r == -1) {
+    // Handle errors!
+  }
+  return r;
+}
+
+/// The data needed to make call `readInto`.
+///
+/// I'm not sure that I like have this class as a pure data container.
+class _ReadIntoWork {
+  int fd;
+  List<int> buffer;
+  int start;
+  int? end;
+
+  _ReadIntoWork(this.fd, this.buffer, this.start, this.end);
+}
+
+@pragma('vm:shared')
+final mutex = Mutex();
+
+@pragma('vm:shared')
+final _work = <int, Object>{};
+
 base class PosixRandomAccessFile extends RandomAccessFile {
   final Fd fd;
 
   PosixRandomAccessFile(this.fd);
 
   @override
-  int readInto(List<int> buffer, [int start = 0, int? end]) {
-    end = RangeError.checkValidRange(start, end, buffer.length);
-    if (end == start) {
-      return 0;
-    }
-    final count = end - start;
-    late int r;
-    if (buffer is Uint8List) {
-      // This approach is also used in `dart:io` but the consequence is that
-      // GC cannot be performed while the `read` call is outstanding.
-      r = _tempFailureRetry(() => read(fd.fd, buffer.address, count));
-    } else {
-      ffi.using((arena) {
-        final buf = arena<Int8>(count);
-        r = _tempFailureRetry(() => read(fd.fd, buf.cast(), count));
-        buffer.setAll(0, buf.asTypedList(r));
-      });
-    }
+  Future<int> readIntoAsync(List<int> buffer, [int start = 0, int? end]) {
+    mutex.lock();
+    int index;
+    do {
+      index = Random().nextInt(1 << 32);
+    } while (_work.containsKey(index));
+    _work[index] = _ReadIntoWork(fd.fd, buffer, start, end);
+    mutex.unlock();
 
-    if (r == -1) {
-      // Handle errors!
-    }
-    return r;
+    return Isolate.run(() {
+      mutex.lock();
+      final w = _work[index] as _ReadIntoWork;
+      _work.remove(index);
+      mutex.unlock();
+      return _readInto(w.fd, w.buffer, w.start, w.end);
+    });
+  }
+
+  @override
+  int readInto(List<int> buffer, [int start = 0, int? end]) {
+    return _readInto(fd.fd, buffer, start, end);
   }
 
   @override

@@ -36,6 +36,10 @@ abstract interface class MinWriter {
 late Writer w;
 
 base class RandomAccessFile {
+  Future<int> readIntoAsync(List<int> buffer, [int start = 0, int? end]) {
+    throw UnimplementedError('readIntoAsync(...)');
+  }
+
   int readInto(List<int> buffer, [int start = 0, int? end]) {
     throw UnimplementedError('readInto(...)');
   }
