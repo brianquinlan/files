@@ -35,6 +35,9 @@ class Fd implements Finalizable {
 @Native<Int Function(Int, Pointer<Uint8>, Int)>(isLeaf: true)
 external int read(int fd, Pointer<Uint8> buf, int count);
 
+@Native<Int Function(Int, Pointer<Uint8>, Int)>(isLeaf: true)
+external int open(int fd, Pointer<Uint8> buf, int count);
+
 int _tempFailureRetry(int Function() f) {
   int result;
   do {
@@ -60,15 +63,19 @@ int _readInto(int fd, List<int> buffer, [int start = 0, int? end]) {
   }
   final count = end - start;
   late int r;
+  assert(start == 0, 'non-zero start not tested yet');
   if (buffer is Uint8List) {
+    if (start != 0) {
+      buffer = buffer.buffer.asUint8List(start);
+    }
     // This approach is also used in `dart:io` but the consequence is that
-    // GC cannot be performed while the `read` call is outstanding.
+    // GC cannot be performed while the `read` call is executing.
     r = _tempFailureRetry(() => read(fd, buffer.address, count));
   } else {
     ffi.using((arena) {
       final buf = arena<Int8>(count);
       r = _tempFailureRetry(() => read(fd, buf.cast(), count));
-      buffer.setAll(0, buf.asTypedList(r));
+      buffer.setAll(start, buf.asTypedList(r));
     });
   }
 
